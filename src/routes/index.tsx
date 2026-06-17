@@ -17,8 +17,8 @@ import {
   type Thread,
 } from "@/lib/threads";
 import { exportChatPdf, exportChatTxt } from "@/lib/exportChat";
-import { envleFileName, listAssets, saveAsset, type GeneratedAsset } from "@/lib/history";
-import type { Msg } from "@/lib/types";
+import { envleFileName, listAssets, saveAsset } from "@/lib/history";
+import type { Msg, GeneratedAsset } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
   head: () => ({
