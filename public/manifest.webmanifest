@@ -1,0 +1,16 @@
+{
+  "name": "E'nvlé IA — L'intelligence artificielle africaine",
+  "short_name": "E'nvlé IA",
+  "description": "Chat IA, génération d'images réalistes et de documents pro (PDF, Word, PPTX) — 100% pensé pour l'Afrique.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a1a1a",
+  "orientation": "portrait",
+  "lang": "fr",
+  "icons": [
+    { "src": "/envle-logo.png", "sizes": "any", "type": "image/png", "purpose": "any" },
+    { "src": "/envle-logo.png", "sizes": "any", "type": "image/png", "purpose": "maskable" }
+  ]
+}
