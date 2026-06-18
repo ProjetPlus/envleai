@@ -14,7 +14,198 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      messages: {
+        Row: {
+          attachments: Json | null
+          content: string
+          created_at: string
+          id: string
+          role: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          attachments?: Json | null
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          attachments?: Json | null
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          age: number | null
+          country: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          goals: string | null
+          id: string
+          language: string | null
+          onboarded: boolean
+          profession: string | null
+          sector: string | null
+          updated_at: string
+        }
+        Insert: {
+          age?: number | null
+          country?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          goals?: string | null
+          id: string
+          language?: string | null
+          onboarded?: boolean
+          profession?: string | null
+          sector?: string | null
+          updated_at?: string
+        }
+        Update: {
+          age?: number | null
+          country?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          goals?: string | null
+          id?: string
+          language?: string | null
+          onboarded?: boolean
+          profession?: string | null
+          sector?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      project_files: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string | null
+          mime_type: string | null
+          name: string
+          project_id: string
+          size_bytes: number | null
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          mime_type?: string | null
+          name: string
+          project_id: string
+          size_bytes?: number | null
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          mime_type?: string | null
+          name?: string
+          project_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          system_prompt: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          system_prompt?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          system_prompt?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      threads: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "threads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

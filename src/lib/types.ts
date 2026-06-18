@@ -1,4 +1,10 @@
-export type Msg = { role: "user" | "assistant"; content: string };
+export type Msg = {
+  id?: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  attachments?: Array<{ kind: "image"; dataUrl: string }> | null;
+  createdAt?: string;
+};
 
 export type GeneratedAsset = {
   id: string;

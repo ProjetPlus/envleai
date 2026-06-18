@@ -4,9 +4,9 @@ import { envleFileName } from "./history";
 
 export function exportChatTxt(title: string, messages: Msg[]) {
   const body = messages
-    .map((m) => `[${m.role === "user" ? "Moi" : "E'nvlé IA"}]\n${m.content}\n`)
+    .map((m) => `[${m.role === "user" ? "Moi" : "E'nvlé AI"}]\n${m.content}\n`)
     .join("\n");
-  const blob = new Blob([`E'nvlé IA — ${title}\n\n${body}`], {
+  const blob = new Blob([`E'nvlé AI — ${title}\n\n${body}`], {
     type: "text/plain;charset=utf-8",
   });
   triggerDownload(blob, envleFileName(title, "txt"));
@@ -20,7 +20,7 @@ export function exportChatPdf(title: string, messages: Msg[]) {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text(`E'nvlé IA — ${title}`, margin, y);
+  doc.text(`E'nvlé AI — ${title}`, margin, y);
   y += 24;
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
@@ -36,7 +36,7 @@ export function exportChatPdf(title: string, messages: Msg[]) {
     }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text(m.role === "user" ? "Moi" : "E'nvlé IA", margin, y);
+    doc.text(m.role === "user" ? "Moi" : "E'nvlé AI", margin, y);
     y += 14;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
