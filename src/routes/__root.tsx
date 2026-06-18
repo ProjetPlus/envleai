@@ -11,7 +11,6 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { Toaster } from "sonner";
 
 function NotFoundComponent() {
   return (
@@ -78,18 +77,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "E'nvlé AI — L'intelligence artificielle africaine" },
-      { name: "description", content: "Chat IA, génération d'images réalistes, projets et documents pro. 100% pensé pour l'Afrique." },
+      { title: "E'nvlé AI - l'intelligence artificielle Africain." },
+      { name: "description", content: "Bienvenue sur E'nvlé AI
+Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "E'nvlé AI — L'intelligence artificielle africaine" },
-      { property: "og:description", content: "Chat IA, génération d'images réalistes, projets et documents pro. 100% pensé pour l'Afrique." },
+      { property: "og:title", content: "E'nvlé AI - l'intelligence artificielle Africain." },
+      { property: "og:description", content: "Bienvenue sur E'nvlé AI
+Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "E'nvlé AI — L'intelligence artificielle africaine" },
-      { name: "twitter:description", content: "Chat IA, génération d'images réalistes, projets et documents pro. 100% pensé pour l'Afrique." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/OI6nUHN0rMdlKjHmlXGUEQqHcM52/social-images/social-1781721207473-209600.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/OI6nUHN0rMdlKjHmlXGUEQqHcM52/social-images/social-1781721207473-209600.webp" },
+      { name: "twitter:title", content: "E'nvlé AI - l'intelligence artificielle Africain." },
+      { name: "twitter:description", content: "Bienvenue sur E'nvlé AI
+Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/OI6nUHN0rMdlKjHmlXGUEQqHcM52/social-images/social-1781781350361-209849.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/OI6nUHN0rMdlKjHmlXGUEQqHcM52/social-images/social-1781781350361-209849.webp" },
     ],
     links: [
       {
@@ -125,7 +127,6 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
 }
