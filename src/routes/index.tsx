@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Menu, Plus, Send, Download, Image as ImgIcon, Trash2, MessageSquare,
-  Copy, Share2, RotateCcw, Edit3, X, LogOut, User,
+  Copy, Share2, RotateCcw, Edit3, Folder, X, LogOut, User,
   Paperclip, Globe, Library, FileText, Loader2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
