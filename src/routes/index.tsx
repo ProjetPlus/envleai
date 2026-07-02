@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Menu, Plus, Send, Download, Image as ImgIcon, Trash2, MessageSquare,
   Copy, Share2, RotateCcw, Edit3, Folder, Upload, X, LogOut, User,
+  Paperclip, Globe, Library, FileText, Loader2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/envle-logo.png";
@@ -17,6 +18,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { chatWithEnvle } from "@/lib/chat.functions";
+import { webSearch } from "@/lib/webSearch.functions";
 import { exportChatPdf, exportChatTxt } from "@/lib/exportChat";
 import type { Msg } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
