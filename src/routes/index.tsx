@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Menu, Plus, Send, Download, Image as ImgIcon, Trash2, MessageSquare,
-  Copy, Share2, RotateCcw, Edit3, Folder, Upload, X, LogOut, User,
+  Copy, Share2, RotateCcw, Edit3, X, LogOut, User,
   Paperclip, Globe, Library, FileText, Loader2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/")({
 
 type Project = { id: string; name: string; description: string | null };
 type Thread = { id: string; title: string; project_id: string | null; updated_at: string };
-type ProjectFile = { id: string; name: string; mime_type: string | null; storage_path: string };
+// (Fichiers projet: gérés via la Bibliothèque)
 
 function App() {
   const [loading, setLoading] = useState(true);
