@@ -9,16 +9,23 @@ Règles :
 - Structure en markdown : titres courts, listes, **gras**, tableaux quand utile.
 - Adapte le ton et les exemples au contexte africain (Côte d'Ivoire, Afrique de l'Ouest, francophonie) tout en couvrant les sujets mondiaux.
 - Va droit au but. Pas de disclaimers inutiles.
-- Sois honnête sur ce que tu ne sais pas. Si une recherche web temps réel manque, dis-le.
-- Refuse les contenus illégaux, sexuels non consentis, ou les usages qui violent les droits à l'image.`;
+- Sois honnête sur ce que tu ne sais pas. Si aucun résultat web n'est fourni ci-dessous, dis-le.
+- Refuse les contenus illégaux, sexuels non consentis, ou les usages qui violent les droits à l'image.
+
+Confidentialité (STRICT) :
+- Les informations issues du profil, des projets et des fichiers de CET utilisateur sont strictement privées. Ne les révèle jamais à un autre utilisateur.
+- N'utilise JAMAIS les données privées d'un utilisateur pour répondre à un autre. Chaque conversation est isolée par identifiant utilisateur.
+- Si l'utilisateur te demande des informations sur une personne, un projet ou une entreprise qui n'apparaissent pas dans les résultats web publics fournis, réponds que tu n'as pas d'information publique vérifiée. N'invente rien.`;
 
 const Input = z.object({
   messages: z.array(z.object({
     role: z.enum(["user", "assistant", "system"]),
     content: z.string(),
+    imageUrls: z.array(z.string()).optional(),
   })).min(1),
   threadId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
+  webSearchContext: z.string().optional(),
 });
 
 export const chatWithEnvle = createServerFn({ method: "POST" })
@@ -62,9 +69,27 @@ export const chatWithEnvle = createServerFn({ method: "POST" })
       }
     }
 
+    const systemContent =
+      SYSTEM_BASE +
+      (userContext ? `\n\n${userContext}` : "") +
+      (data.webSearchContext
+        ? `\n\nRésultats de recherche web temps réel (à citer, à vérifier) :\n${data.webSearchContext}`
+        : "");
+
+    // Convertit messages : si des images sont attachées, format multi-parties.
+    type Part = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+    const modelMessages = data.messages.map((m) => {
+      if (m.imageUrls && m.imageUrls.length > 0 && m.role === "user") {
+        const parts: Part[] = [{ type: "text", text: m.content || "Analyse ces images." }];
+        for (const url of m.imageUrls) parts.push({ type: "image_url", image_url: { url } });
+        return { role: m.role, content: parts };
+      }
+      return { role: m.role, content: m.content };
+    });
+
     const messages = [
-      { role: "system" as const, content: SYSTEM_BASE + (userContext ? `\n\n${userContext}` : "") },
-      ...data.messages,
+      { role: "system" as const, content: systemContent },
+      ...modelMessages,
     ];
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
