@@ -763,163 +763,141 @@ function IconBtn({ children, onClick, label }: { children: React.ReactNode; onCl
   );
 }
 
-// ---------------- IMAGE STUDIO ----------------
-function ImageStudio({ userId }: { userId: string }) {
-  const [prompt, setPrompt] = useState("");
-  const [refs, setRefs] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+// ---------------- LIBRARY ----------------
+type LibraryItem = {
+  id: string;
+  kind: "image" | "document" | "generated";
+  name: string;
+  url: string;
+  projectId: string | null;
+  projectName?: string;
+  threadId: string | null;
+  createdAt: string;
+};
 
-  const addRef = (f: File) => {
-    const reader = new FileReader();
-    reader.onload = () => setRefs((r) => [...r, reader.result as string]);
-    reader.readAsDataURL(f);
-  };
+function LibraryView({ userId, projects }: { userId: string; projects: Project[] }) {
+  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [filter, setFilter] = useState<"all" | "image" | "document" | "generated">("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const projectById = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
-  const generate = async () => {
-    if (!prompt.trim()) return;
-    setBusy(true); setResult(null);
-    try {
-      const res = await fetch("/api/generate-image", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, referenceImages: refs }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Erreur");
-      setResult(json.imageUrl);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally { setBusy(false); }
-  };
+  useEffect(() => {
+    (async () => {
+      const out: LibraryItem[] = [];
 
-  const download = () => {
-    if (!result) return;
-    const a = document.createElement("a");
-    a.href = result;
-    a.download = `envle-${Date.now()}.png`;
-    a.click();
-  };
+      // Uploaded assets in messages (image attachments in user messages)
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("id,thread_id,attachments,created_at,role,threads(project_id)")
+        .eq("user_id", userId)
+        .not("attachments", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      for (const m of (msgs ?? []) as Array<{
+        id: string; thread_id: string | null; attachments: Msg["attachments"];
+        created_at: string; role: string; threads: { project_id: string | null } | null;
+      }>) {
+        (m.attachments ?? []).forEach((a, k) => {
+          if (a.kind === "image") {
+            out.push({
+              id: `${m.id}-${k}`,
+              kind: m.role === "assistant" ? "generated" : "image",
+              name: m.role === "assistant" ? "Image générée" : "Image jointe",
+              url: a.dataUrl,
+              projectId: m.threads?.project_id ?? null,
+              projectName: m.threads?.project_id ? projectById[m.threads.project_id] : undefined,
+              threadId: m.thread_id,
+              createdAt: m.created_at,
+            });
+          }
+        });
+      }
+
+      // Uploaded project files
+      const { data: files } = await supabase
+        .from("project_files")
+        .select("id,name,mime_type,storage_path,project_id,kind,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      for (const f of (files ?? []) as Array<{
+        id: string; name: string; mime_type: string; storage_path: string;
+        project_id: string; kind: string; created_at: string;
+      }>) {
+        const { data: signed } = await supabase.storage.from("project-files")
+          .createSignedUrl(f.storage_path, 3600);
+        out.push({
+          id: f.id,
+          kind: f.mime_type.startsWith("image/") ? "image" : "document",
+          name: f.name,
+          url: signed?.signedUrl ?? "",
+          projectId: f.project_id,
+          projectName: projectById[f.project_id],
+          threadId: null,
+          createdAt: f.created_at,
+        });
+      }
+
+      out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      setItems(out);
+    })();
+  }, [userId, projects.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filtered = items.filter((it) => {
+    if (filter !== "all" && it.kind !== filter) return false;
+    if (projectFilter !== "all" && it.projectId !== projectFilter) return false;
+    if (search && !it.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
-      <div className="mx-auto max-w-3xl space-y-4">
-        <h2 className="text-lg font-semibold">Studio d'image</h2>
-        <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
-          placeholder="Décris l'image (sujet, ambiance, style)…" />
-        <div>
-          <Label className="text-xs">Photos de référence (optionnel)</Label>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {refs.map((r, i) => (
-              <div key={i} className="relative">
-                <img src={r} alt="" className="h-20 w-20 rounded object-cover" />
-                <button onClick={() => setRefs(refs.filter((_, j) => j !== i))}
-                  className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white">
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-            <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded border-2 border-dashed text-muted-foreground hover:border-primary hover:text-primary">
-              <Upload className="h-5 w-5" />
-              <input type="file" accept="image/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) addRef(f); e.target.value = ""; }} />
-            </label>
+      <div className="mx-auto max-w-5xl space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="mr-auto text-lg font-semibold">Bibliothèque</h2>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Rechercher…" value={search} onChange={(e) => setSearch(e.target.value)}
+              className="h-8 w-48 pl-7 text-sm" />
           </div>
         </div>
-        <Button onClick={generate} disabled={busy || !prompt.trim()}>
-          {busy ? "Génération…" : "Générer l'image"}
-        </Button>
-        {result && (
-          <div className="rounded-xl border bg-card p-3">
-            <img src={result} alt="Résultat" className="mx-auto max-h-[60vh] rounded" />
-            <Button onClick={download} variant="outline" className="mt-3">
-              <Download className="mr-2 h-4 w-4" />Télécharger
+        <div className="flex flex-wrap gap-1">
+          {(["all", "generated", "image", "document"] as const).map((k) => (
+            <Button key={k} size="sm" variant={filter === k ? "secondary" : "ghost"} onClick={() => setFilter(k)}>
+              {k === "all" ? "Tout" : k === "generated" ? "Images générées" : k === "image" ? "Images jointes" : "Documents"}
             </Button>
-          </div>
-        )}
-      </div>
-      {/* userId unused for now; suppress eslint */}
-      <span className="hidden">{userId}</span>
-    </div>
-  );
-}
-
-// ---------------- FILES ----------------
-function FilesView({ userId, projectId }: { userId: string; projectId: string }) {
-  const [files, setFiles] = useState<ProjectFile[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from("project_files")
-      .select("id,name,mime_type,storage_path")
-      .eq("project_id", projectId).order("created_at", { ascending: false });
-    setFiles((data ?? []) as ProjectFile[]);
-  }, [projectId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const upload = async (file: File) => {
-    setBusy(true);
-    const path = `${userId}/${projectId}/${Date.now()}-${file.name}`;
-    const { error: upErr } = await supabase.storage.from("project-files").upload(path, file);
-    if (upErr) { toast.error(upErr.message); setBusy(false); return; }
-    const kind = file.type.startsWith("image") ? "image"
-      : file.type.startsWith("video") ? "video"
-      : "document";
-    const { error } = await supabase.from("project_files").insert({
-      user_id: userId, project_id: projectId, name: file.name,
-      mime_type: file.type, size_bytes: file.size, storage_path: path, kind,
-    });
-    setBusy(false);
-    if (error) toast.error(error.message);
-    else { toast.success("Fichier ajouté"); load(); }
-  };
-
-  const remove = async (f: ProjectFile) => {
-    if (!confirm(`Supprimer ${f.name} ?`)) return;
-    await supabase.storage.from("project-files").remove([f.storage_path]);
-    await supabase.from("project_files").delete().eq("id", f.id);
-    load();
-  };
-
-  const download = async (f: ProjectFile) => {
-    const { data, error } = await supabase.storage.from("project-files")
-      .createSignedUrl(f.storage_path, 60);
-    if (error || !data) { toast.error("Téléchargement impossible"); return; }
-    window.open(data.signedUrl, "_blank");
-  };
-
-  return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6">
-      <div className="mx-auto max-w-3xl space-y-4">
-        <h2 className="text-lg font-semibold">Fichiers du projet</h2>
-        <p className="text-sm text-muted-foreground">
-          Documents, images et vidéos rattachés au projet. L'IA pourra les consulter dans les futures mises à jour.
-        </p>
-        <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-8 hover:border-primary">
-          <div className="text-center">
-            <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
-            <div className="mt-2 text-sm">{busy ? "Envoi…" : "Cliquer pour téléverser"}</div>
-          </div>
-          <input type="file" className="hidden" disabled={busy}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
-        </label>
-        <ul className="divide-y rounded-lg border bg-card">
-          {files.map((f) => (
-            <li key={f.id} className="flex items-center gap-3 p-3">
-              <Folder className="h-4 w-4 text-muted-foreground" />
-              <span className="flex-1 truncate text-sm">{f.name}</span>
-              <button onClick={() => download(f)} className="rounded p-1 hover:bg-accent" aria-label="Télécharger">
-                <Download className="h-4 w-4" />
-              </button>
-              <button onClick={() => remove(f)} className="rounded p-1 hover:bg-accent" aria-label="Supprimer">
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </button>
-            </li>
           ))}
-          {files.length === 0 && (
-            <li className="p-4 text-center text-sm text-muted-foreground">Aucun fichier</li>
-          )}
-        </ul>
+          <div className="ml-auto">
+            <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}
+              className="h-8 rounded-md border bg-background px-2 text-sm">
+              <option value="all">Tous les projets</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+        </div>
+        {filtered.length === 0 && (
+          <p className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+            Rien pour le moment. Les images générées et les fichiers joints à tes conversations apparaîtront ici.
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {filtered.map((it) => (
+            <a key={it.id} href={it.url} target="_blank" rel="noreferrer"
+              className="group flex flex-col overflow-hidden rounded-lg border bg-card transition hover:shadow-md">
+              <div className="aspect-square w-full bg-muted">
+                {it.kind !== "document" && it.url
+                  ? <img src={it.url} alt={it.name} className="h-full w-full object-cover" />
+                  : <div className="flex h-full items-center justify-center"><FileText className="h-8 w-8 text-muted-foreground" /></div>}
+              </div>
+              <div className="space-y-0.5 p-2 text-xs">
+                <div className="truncate font-medium">{it.name}</div>
+                <div className="truncate text-muted-foreground">
+                  {it.projectName ?? "—"} · {new Date(it.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );
