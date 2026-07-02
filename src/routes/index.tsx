@@ -187,7 +187,7 @@ function Workspace({ userId, email }: { userId: string; email: string }) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [view, setView] = useState<"chat" | "image" | "files">("chat");
+  const [view, setView] = useState<"chat" | "library">("chat");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const loadProjects = useCallback(async () => {
@@ -342,11 +342,8 @@ function Workspace({ userId, email }: { userId: string; email: string }) {
             <Button size="sm" variant={view === "chat" ? "secondary" : "ghost"} onClick={() => setView("chat")}>
               <MessageSquare className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Chat</span>
             </Button>
-            <Button size="sm" variant={view === "image" ? "secondary" : "ghost"} onClick={() => setView("image")}>
-              <ImgIcon className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Image</span>
-            </Button>
-            <Button size="sm" variant={view === "files" ? "secondary" : "ghost"} onClick={() => setView("files")} disabled={!activeProjectId}>
-              <Folder className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Fichiers</span>
+            <Button size="sm" variant={view === "library" ? "secondary" : "ghost"} onClick={() => setView("library")}>
+              <Library className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Bibliothèque</span>
             </Button>
           </div>
         </header>
@@ -369,8 +366,7 @@ function Workspace({ userId, email }: { userId: string; email: string }) {
             onTitleChange={loadThreads}
           />
         )}
-        {view === "image" && <ImageStudio userId={userId} />}
-        {view === "files" && activeProjectId && <FilesView userId={userId} projectId={activeProjectId} />}
+        {view === "library" && <LibraryView userId={userId} projects={projects} />}
       </main>
     </div>
   );
