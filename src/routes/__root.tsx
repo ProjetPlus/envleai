@@ -78,18 +78,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "E'nvlé AI - l'intelligence artificielle Africain." },
-      { name: "description", content: "Bienvenue sur E'nvlé AI
-Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
+      { name: "description", content: "Bienvenue sur E'nvlé AI. Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "E'nvlé AI - l'intelligence artificielle Africain." },
-      { property: "og:description", content: "Bienvenue sur E'nvlé AI
-Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
+      { property: "og:description", content: "Bienvenue sur E'nvlé AI. Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "E'nvlé AI - l'intelligence artificielle Africain." },
-      { name: "twitter:description", content: "Bienvenue sur E'nvlé AI
-Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
+      { name: "twitter:description", content: "Bienvenue sur E'nvlé AI. Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer." },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/OI6nUHN0rMdlKjHmlXGUEQqHcM52/social-images/social-1781781350361-209849.webp" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/OI6nUHN0rMdlKjHmlXGUEQqHcM52/social-images/social-1781781350361-209849.webp" },
     ],
