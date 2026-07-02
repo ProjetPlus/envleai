@@ -388,8 +388,14 @@ function ChatView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const chatFn = useServerFn(chatWithEnvle);
+  const searchFn = useServerFn(webSearch);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [pending, setPending] = useState<
+    Array<{ kind: "image" | "doc"; name: string; dataUrl?: string; text?: string; mime: string }>
+  >([]);
+  const [imageMode, setImageMode] = useState(false);
+  const [webMode, setWebMode] = useState(false);
 
   useEffect(() => { inputRef.current?.focus(); }, [threadId]);
 
@@ -399,6 +405,7 @@ function ChatView({
       .then(({ data }) => {
         setMessages((data ?? []).map((r) => ({
           id: r.id, role: r.role as Msg["role"], content: r.content, createdAt: r.created_at,
+          attachments: (r.attachments as Msg["attachments"]) ?? null,
         })));
       });
   }, [threadId]);
@@ -407,9 +414,63 @@ function ChatView({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
-  const send = async (overrideText?: string, regenerate = false) => {
+  const readFile = (f: File) =>
+    new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(f);
+    });
+
+  const readText = (f: File) =>
+    new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsText(f);
+    });
+
+  const onAttach = async (files: FileList | null) => {
+    if (!files) return;
+    for (const f of Array.from(files)) {
+      if (f.size > 8 * 1024 * 1024) { toast.error(`${f.name} > 8 Mo`); continue; }
+      if (f.type.startsWith("image/")) {
+        const dataUrl = await readFile(f);
+        setPending((p) => [...p, { kind: "image", name: f.name, dataUrl, mime: f.type }]);
+      } else if (f.type.startsWith("text/") || /\.(txt|md|csv|json|log)$/i.test(f.name)) {
+        const text = await readText(f);
+        setPending((p) => [...p, { kind: "doc", name: f.name, text: text.slice(0, 30000), mime: f.type || "text/plain" }]);
+      } else {
+        toast.error(`Type non pris en charge: ${f.name}. Utilise image ou texte.`);
+      }
+    }
+  };
+
+  const generateImage = async (tid: string, promptText: string) => {
+    const res = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: promptText,
+        referenceImages: pending.filter((p) => p.kind === "image" && p.dataUrl).map((p) => p.dataUrl!),
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Erreur image");
+    const url: string = json.imageUrl;
+    const content = `Voici l'image générée pour : « ${promptText} »`;
+    const attach = [{ kind: "image" as const, dataUrl: url }];
+    const { data: inserted } = await supabase.from("messages")
+      .insert({ user_id: userId, thread_id: tid, role: "assistant", content, attachments: attach })
+      .select().single();
+    return inserted
+      ? { id: inserted.id, role: "assistant" as const, content, attachments: attach, createdAt: inserted.created_at }
+      : { role: "assistant" as const, content, attachments: attach };
+  };
+
+  const send = async (overrideText?: string, regenerate = false, baseMessages?: Msg[]) => {
     const text = (overrideText ?? input).trim();
-    if (!text && !regenerate) return;
+    if (!text && !regenerate && pending.length === 0) return;
     if (busy) return;
 
     let tid = threadId;
@@ -418,19 +479,27 @@ function ChatView({
       if (!tid) return;
     }
 
-    let nextMessages = messages;
+    let nextMessages = baseMessages ?? messages;
     if (!regenerate) {
+      const imgAttachments = pending.filter((p) => p.kind === "image" && p.dataUrl)
+        .map((p) => ({ kind: "image" as const, dataUrl: p.dataUrl! }));
+      const docContext = pending.filter((p) => p.kind === "doc" && p.text)
+        .map((p) => `\n\n[Document joint — ${p.name}]\n${p.text}`).join("");
+      const fullText = text + docContext;
       const { data: inserted } = await supabase.from("messages")
-        .insert({ user_id: userId, thread_id: tid, role: "user", content: text })
+        .insert({
+          user_id: userId, thread_id: tid, role: "user", content: fullText,
+          attachments: imgAttachments.length ? imgAttachments : null,
+        })
         .select().single();
       const userMsg: Msg = inserted
-        ? { id: inserted.id, role: "user", content: text, createdAt: inserted.created_at }
-        : { role: "user", content: text };
-      nextMessages = [...messages, userMsg];
+        ? { id: inserted.id, role: "user", content: fullText, attachments: imgAttachments, createdAt: inserted.created_at }
+        : { role: "user", content: fullText, attachments: imgAttachments };
+      nextMessages = [...nextMessages, userMsg];
       setMessages(nextMessages);
       setInput("");
-      if (messages.length === 0) {
-        const title = text.slice(0, 60);
+      if (nextMessages.filter((m) => m.role === "user").length === 1) {
+        const title = (text || "Nouvelle conversation").slice(0, 60);
         await supabase.from("threads").update({ title }).eq("id", tid);
         onTitleChange();
       }
@@ -438,17 +507,40 @@ function ChatView({
 
     setBusy(true);
     try {
-      const payload = nextMessages.map((m) => ({ role: m.role, content: m.content }));
-      const res = await chatFn({ data: { messages: payload, threadId: tid, projectId: projectId ?? undefined } });
-      const { data: inserted } = await supabase.from("messages")
-        .insert({ user_id: userId, thread_id: tid, role: "assistant", content: res.reply })
-        .select().single();
-      const aMsg: Msg = inserted
-        ? { id: inserted.id, role: "assistant", content: res.reply, createdAt: inserted.created_at }
-        : { role: "assistant", content: res.reply };
-      setMessages([...nextMessages, aMsg]);
+      // Image mode → generate an image directly
+      if (imageMode && !regenerate) {
+        const aMsg = await generateImage(tid, text || "Illustration professionnelle FHD");
+        setMessages([...nextMessages, aMsg]);
+      } else {
+        // Optional live web search
+        let webContext = "";
+        if (webMode) {
+          try {
+            const s = await searchFn({ data: { query: text || nextMessages[nextMessages.length - 1]?.content?.slice(0, 200) || "" } });
+            if (s.available) webContext = s.context;
+            else if (s.message) toast.info(s.message);
+          } catch (e) { toast.error((e as Error).message); }
+        }
+        const payload = nextMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          imageUrls: m.attachments?.filter((a) => a.kind === "image").map((a) => a.dataUrl) ?? undefined,
+        }));
+        const res = await chatFn({ data: {
+          messages: payload, threadId: tid, projectId: projectId ?? undefined,
+          webSearchContext: webContext || undefined,
+        } });
+        const { data: inserted } = await supabase.from("messages")
+          .insert({ user_id: userId, thread_id: tid, role: "assistant", content: res.reply })
+          .select().single();
+        const aMsg: Msg = inserted
+          ? { id: inserted.id, role: "assistant", content: res.reply, createdAt: inserted.created_at }
+          : { role: "assistant", content: res.reply };
+        setMessages([...nextMessages, aMsg]);
+      }
       await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", tid);
       onTitleChange();
+      setPending([]);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -470,15 +562,29 @@ function ChatView({
     await supabase.from("messages").delete().eq("id", last.id);
     const without = messages.filter((m) => m.id !== last.id);
     setMessages(without);
-    await send(undefined, true);
+    await send(undefined, true, without);
   };
 
   const startEdit = (m: Msg) => { setEditingId(m.id ?? null); setEditValue(m.content); };
   const saveEdit = async () => {
     if (!editingId) return;
+    const idx = messages.findIndex((m) => m.id === editingId);
+    if (idx < 0) { setEditingId(null); return; }
+    const edited = messages[idx];
+    // Update the edited message
     await supabase.from("messages").update({ content: editValue }).eq("id", editingId);
-    setMessages(messages.map((m) => m.id === editingId ? { ...m, content: editValue } : m));
+    // Delete every message AFTER this one in DB and state (user re-runs from here)
+    const toDelete = messages.slice(idx + 1).map((m) => m.id).filter(Boolean) as string[];
+    if (toDelete.length) await supabase.from("messages").delete().in("id", toDelete);
+    const kept: Msg[] = messages.slice(0, idx + 1).map((m) =>
+      m.id === editingId ? { ...m, content: editValue } : m
+    );
+    setMessages(kept);
     setEditingId(null);
+    // If user message was edited, relaunch generation
+    if (edited.role === "user") {
+      await send(undefined, true, kept);
+    }
   };
 
   const shareMsg = async (content: string) => {
@@ -500,7 +606,7 @@ function ChatView({
               <img src={logo} alt="" className="mx-auto h-16 w-auto" />
               <h2 className="mt-3 text-xl font-semibold">Bienvenue sur E'nvlé AI</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Pose ta question, demande un texte, un plan, un résumé… ou bascule sur « Image » pour générer.
+                Pose ta question, joins une image ou un document, active la recherche web, ou passe en mode image pour générer.
               </p>
             </div>
           )}
@@ -536,14 +642,27 @@ function ChatView({
                 <div className="space-y-2">
                   <Textarea value={editValue} onChange={(e) => setEditValue(e.target.value)} rows={4} />
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={saveEdit}>Enregistrer</Button>
+                    <Button size="sm" onClick={saveEdit}>
+                      {m.role === "user" ? "Relancer" : "Enregistrer"}
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Annuler</Button>
                   </div>
                 </div>
-              ) : m.role === "assistant" ? (
-                <Markdown>{m.content}</Markdown>
               ) : (
-                <div className="whitespace-pre-wrap text-sm">{m.content}</div>
+                <>
+                  {m.attachments && m.attachments.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {m.attachments.filter((a) => a.kind === "image").map((a, k) => (
+                        <a key={k} href={a.dataUrl} target="_blank" rel="noreferrer">
+                          <img src={a.dataUrl} alt="" className="max-h-64 rounded-lg border object-contain" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {m.role === "assistant"
+                    ? <Markdown>{m.content}</Markdown>
+                    : <div className="whitespace-pre-wrap text-sm">{m.content}</div>}
+                </>
               )}
             </div>
           ))}
@@ -561,30 +680,74 @@ function ChatView({
       </div>
 
       <div className="border-t bg-card px-3 py-3 md:px-6">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <Textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Pose ta question à E'nvlé AI…"
-            rows={1}
-            className="min-h-[44px] max-h-40 resize-none"
-          />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={messages.length === 0} aria-label="Exporter">
-                <Download className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => exportChatPdf(title, messages)}>Exporter en PDF</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportChatTxt(title, messages)}>Exporter en TXT</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={() => send()} disabled={busy || !input.trim()} size="icon" aria-label="Envoyer">
-            <Send className="h-4 w-4" />
-          </Button>
+        <div className="mx-auto max-w-3xl space-y-2">
+          {pending.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {pending.map((p, i) => (
+                <div key={i} className="relative flex items-center gap-2 rounded-lg border bg-background px-2 py-1 text-xs">
+                  {p.kind === "image" && p.dataUrl
+                    ? <img src={p.dataUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                    : <FileText className="h-4 w-4 text-muted-foreground" />}
+                  <span className="max-w-[10rem] truncate">{p.name}</span>
+                  <button onClick={() => setPending((all) => all.filter((_, j) => j !== i))} aria-label="Retirer">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <div className="flex items-center gap-1">
+              <label className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border hover:bg-accent" title="Joindre">
+                <Paperclip className="h-4 w-4" />
+                <input type="file" multiple className="hidden"
+                  accept="image/*,text/*,.txt,.md,.csv,.json,.log"
+                  onChange={(e) => { onAttach(e.target.files); e.target.value = ""; }} />
+              </label>
+              <button
+                onClick={() => setImageMode((v) => !v)}
+                title="Mode génération d'image"
+                className={`flex h-9 w-9 items-center justify-center rounded-md border ${imageMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
+                <ImgIcon className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setWebMode((v) => !v)}
+                title="Recherche web"
+                className={`flex h-9 w-9 items-center justify-center rounded-md border ${webMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
+                <Globe className="h-4 w-4" />
+              </button>
+            </div>
+            <Textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={imageMode
+                ? "Décris l'image à générer (Shift+Entrée = ligne)"
+                : webMode
+                  ? "Question avec recherche web temps réel (Shift+Entrée = ligne)"
+                  : "Pose ta question à E'nvlé AI (Shift+Entrée = ligne)"}
+              rows={1}
+              className="min-h-[44px] max-h-40 resize-none"
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" disabled={messages.length === 0} aria-label="Exporter">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => exportChatPdf(title, messages)}>Exporter en PDF</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportChatTxt(title, messages)}>Exporter en TXT</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => send()} disabled={busy || (!input.trim() && pending.length === 0)} size="icon" aria-label="Envoyer">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="px-1 text-[10px] text-muted-foreground">
+            Entrée envoie · Shift+Entrée = nouvelle ligne · Tes données restent privées.
+          </p>
         </div>
       </div>
     </div>
