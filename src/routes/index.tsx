@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Menu, Plus, Send, Download, Image as ImgIcon, Trash2, MessageSquare,
   Copy, Share2, RotateCcw, Edit3, Folder, X, LogOut, User,
-  Paperclip, Globe, Library, FileText, Loader2, Search,
+  Paperclip, Library, FileText, Loader2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/envle-logo.png";
@@ -398,7 +398,6 @@ function ChatView({
     Array<{ kind: "image" | "doc"; name: string; dataUrl?: string; text?: string; mime: string }>
   >([]);
   const [imageMode, setImageMode] = useState(false);
-  const [webMode, setWebMode] = useState(false);
 
   useEffect(() => { inputRef.current?.focus(); }, [threadId]);
 
@@ -437,15 +436,18 @@ function ChatView({
   const onAttach = async (files: FileList | null) => {
     if (!files) return;
     for (const f of Array.from(files)) {
-      if (f.size > 8 * 1024 * 1024) { toast.error(`${f.name} > 8 Mo`); continue; }
+      if (f.size > 15 * 1024 * 1024) { toast.error(`${f.name} > 15 Mo`); continue; }
       if (f.type.startsWith("image/")) {
         const dataUrl = await readFile(f);
         setPending((p) => [...p, { kind: "image", name: f.name, dataUrl, mime: f.type }]);
-      } else if (f.type.startsWith("text/") || /\.(txt|md|csv|json|log)$/i.test(f.name)) {
+      } else if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+        const dataUrl = await readFile(f);
+        setPending((p) => [...p, { kind: "doc", name: f.name, dataUrl, mime: "application/pdf" }]);
+      } else if (f.type.startsWith("text/") || /\.(txt|md|csv|json|log|html|xml|yaml|yml|tsv)$/i.test(f.name)) {
         const text = await readText(f);
-        setPending((p) => [...p, { kind: "doc", name: f.name, text: text.slice(0, 30000), mime: f.type || "text/plain" }]);
+        setPending((p) => [...p, { kind: "doc", name: f.name, text: text.slice(0, 60000), mime: f.type || "text/plain" }]);
       } else {
-        toast.error(`Type non pris en charge: ${f.name}. Utilise image ou texte.`);
+        toast.error(`Type non pris en charge: ${f.name}. Formats acceptés : images, PDF, texte (txt, md, csv, json…).`);
       }
     }
   };
@@ -485,7 +487,9 @@ function ChatView({
 
     let nextMessages = baseMessages ?? messages;
     if (!regenerate) {
-      const imgAttachments = pending.filter((p) => p.kind === "image" && p.dataUrl)
+      // Toutes les pièces jointes visuelles (images + PDF) sont stockées en tant qu'attachments "image"
+      // pour passage direct au modèle (Gemini accepte les data URLs application/pdf).
+      const imgAttachments = pending.filter((p) => p.dataUrl)
         .map((p) => ({ kind: "image" as const, dataUrl: p.dataUrl! }));
       const docContext = pending.filter((p) => p.kind === "doc" && p.text)
         .map((p) => `\n\n[Document joint — ${p.name}]\n${p.text}`).join("");
@@ -516,14 +520,14 @@ function ChatView({
         const aMsg = await generateImage(tid, text || "Illustration professionnelle FHD");
         setMessages([...nextMessages, aMsg]);
       } else {
-        // Optional live web search
+        // Recherche web AUTOMATIQUE et silencieuse à chaque tour non-image.
         let webContext = "";
-        if (webMode) {
+        const query = text || nextMessages[nextMessages.length - 1]?.content?.slice(0, 400) || "";
+        if (query) {
           try {
-            const s = await searchFn({ data: { query: text || nextMessages[nextMessages.length - 1]?.content?.slice(0, 200) || "" } });
+            const s = await searchFn({ data: { query, limit: 6 } });
             if (s.available) webContext = s.context;
-            else if (s.message) toast.info(s.message);
-          } catch (e) { toast.error((e as Error).message); }
+          } catch { /* silencieux */ }
         }
         const payload = nextMessages.map((m) => ({
           role: m.role,
@@ -575,11 +579,12 @@ function ChatView({
     setBusy(true);
     try {
       let webContext = "";
-      if (webMode) {
+      const rq = context[context.length - 1]?.content?.slice(0, 400) || "";
+      if (rq) {
         try {
-          const s = await searchFn({ data: { query: context[context.length - 1]?.content?.slice(0, 200) || "" } });
+          const s = await searchFn({ data: { query: rq, limit: 6 } });
           if (s.available) webContext = s.context;
-        } catch { /* ignore */ }
+        } catch { /* silencieux */ }
       }
       const payload = context.map((m) => ({
         role: m.role, content: m.content,
@@ -798,7 +803,7 @@ function ChatView({
               <label className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border hover:bg-accent" title="Joindre">
                 <Paperclip className="h-4 w-4" />
                 <input type="file" multiple className="hidden"
-                  accept="image/*,text/*,.txt,.md,.csv,.json,.log"
+                  accept="image/*,application/pdf,text/*,.pdf,.txt,.md,.csv,.json,.log,.html,.xml,.yaml,.yml,.tsv"
                   onChange={(e) => { onAttach(e.target.files); e.target.value = ""; }} />
               </label>
               <button
@@ -807,12 +812,6 @@ function ChatView({
                 className={`flex h-9 w-9 items-center justify-center rounded-md border ${imageMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
                 <ImgIcon className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setWebMode((v) => !v)}
-                title="Recherche web"
-                className={`flex h-9 w-9 items-center justify-center rounded-md border ${webMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
-                <Globe className="h-4 w-4" />
-              </button>
             </div>
             <Textarea
               ref={inputRef}
@@ -820,10 +819,8 @@ function ChatView({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               placeholder={imageMode
-                ? "Décris l'image à générer (Shift+Entrée = ligne)"
-                : webMode
-                  ? "Question avec recherche web temps réel (Shift+Entrée = ligne)"
-                  : "Pose ta question à E'nvlé AI (Shift+Entrée = ligne)"}
+                ? "Décris l'image à générer, ou joins une image à modifier…"
+                : "Pose ta question à E'nvlé AI — Shift+Entrée = nouvelle ligne"}
               rows={1}
               className="min-h-[44px] max-h-40 resize-none"
             />
@@ -842,9 +839,6 @@ function ChatView({
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="px-1 text-[10px] text-muted-foreground">
-            Entrée envoie · Shift+Entrée = nouvelle ligne · Tes données restent privées.
-          </p>
         </div>
       </div>
     </div>
