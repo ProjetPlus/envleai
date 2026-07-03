@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Menu, Plus, Send, Download, Image as ImgIcon, Trash2, MessageSquare,
   Copy, Share2, RotateCcw, Edit3, Folder, X, LogOut, User,
-  Paperclip, Globe, Library, FileText, Loader2, Search,
+  Paperclip, Library, FileText, Loader2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/envle-logo.png";
@@ -398,7 +398,6 @@ function ChatView({
     Array<{ kind: "image" | "doc"; name: string; dataUrl?: string; text?: string; mime: string }>
   >([]);
   const [imageMode, setImageMode] = useState(false);
-  const [webMode, setWebMode] = useState(false);
 
   useEffect(() => { inputRef.current?.focus(); }, [threadId]);
 
