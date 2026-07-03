@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 const Input = z.object({
-  query: z.string().min(2).max(500),
+  query: z.string().min(2).max(1000),
   limit: z.number().int().min(1).max(8).optional(),
 });
 
