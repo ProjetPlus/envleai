@@ -436,15 +436,18 @@ function ChatView({
   const onAttach = async (files: FileList | null) => {
     if (!files) return;
     for (const f of Array.from(files)) {
-      if (f.size > 8 * 1024 * 1024) { toast.error(`${f.name} > 8 Mo`); continue; }
+      if (f.size > 15 * 1024 * 1024) { toast.error(`${f.name} > 15 Mo`); continue; }
       if (f.type.startsWith("image/")) {
         const dataUrl = await readFile(f);
         setPending((p) => [...p, { kind: "image", name: f.name, dataUrl, mime: f.type }]);
-      } else if (f.type.startsWith("text/") || /\.(txt|md|csv|json|log)$/i.test(f.name)) {
+      } else if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+        const dataUrl = await readFile(f);
+        setPending((p) => [...p, { kind: "doc", name: f.name, dataUrl, mime: "application/pdf" }]);
+      } else if (f.type.startsWith("text/") || /\.(txt|md|csv|json|log|html|xml|yaml|yml|tsv)$/i.test(f.name)) {
         const text = await readText(f);
-        setPending((p) => [...p, { kind: "doc", name: f.name, text: text.slice(0, 30000), mime: f.type || "text/plain" }]);
+        setPending((p) => [...p, { kind: "doc", name: f.name, text: text.slice(0, 60000), mime: f.type || "text/plain" }]);
       } else {
-        toast.error(`Type non pris en charge: ${f.name}. Utilise image ou texte.`);
+        toast.error(`Type non pris en charge: ${f.name}. Formats acceptés : images, PDF, texte (txt, md, csv, json…).`);
       }
     }
   };
