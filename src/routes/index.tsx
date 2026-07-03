@@ -487,7 +487,9 @@ function ChatView({
 
     let nextMessages = baseMessages ?? messages;
     if (!regenerate) {
-      const imgAttachments = pending.filter((p) => p.kind === "image" && p.dataUrl)
+      // Toutes les pièces jointes visuelles (images + PDF) sont stockées en tant qu'attachments "image"
+      // pour passage direct au modèle (Gemini accepte les data URLs application/pdf).
+      const imgAttachments = pending.filter((p) => p.dataUrl)
         .map((p) => ({ kind: "image" as const, dataUrl: p.dataUrl! }));
       const docContext = pending.filter((p) => p.kind === "doc" && p.text)
         .map((p) => `\n\n[Document joint — ${p.name}]\n${p.text}`).join("");
