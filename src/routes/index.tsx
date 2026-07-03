@@ -21,6 +21,7 @@ import { chatWithEnvle } from "@/lib/chat.functions";
 import { webSearch } from "@/lib/webSearch.functions";
 import { exportChatPdf, exportChatTxt } from "@/lib/exportChat";
 import type { Msg } from "@/lib/types";
+import type { MsgVersion } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
@@ -387,6 +388,8 @@ function ChatView({
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  // Currently-displayed version index per message id. undefined => latest.
+  const [versionView, setVersionView] = useState<Record<string, number>>({});
   const chatFn = useServerFn(chatWithEnvle);
   const searchFn = useServerFn(webSearch);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -406,6 +409,7 @@ function ChatView({
         setMessages((data ?? []).map((r) => ({
           id: r.id, role: r.role as Msg["role"], content: r.content, createdAt: r.created_at,
           attachments: (r.attachments as Msg["attachments"]) ?? null,
+          versions: ((r.versions as unknown) as MsgVersion[] | null) ?? [],
         })));
       });
   }, [threadId]);
@@ -556,13 +560,48 @@ function ChatView({
   };
 
   const regenerate = async () => {
-    // remove last assistant message and re-send
-    const last = [...messages].reverse().find((m) => m.role === "assistant");
+    // Regenerate last assistant message in place, keeping previous content as a version.
+    const lastIdx = [...messages].map((m) => m.role).lastIndexOf("assistant");
+    if (lastIdx < 0) return;
+    const last = messages[lastIdx];
     if (!last?.id) return;
-    await supabase.from("messages").delete().eq("id", last.id);
-    const without = messages.filter((m) => m.id !== last.id);
-    setMessages(without);
-    await send(undefined, true, without);
+    const priorVersion: MsgVersion = {
+      content: last.content,
+      attachments: last.attachments ?? null,
+      createdAt: last.createdAt ?? new Date().toISOString(),
+    };
+    const priorVersions = [...(last.versions ?? []), priorVersion];
+    const context = messages.slice(0, lastIdx);
+    setBusy(true);
+    try {
+      let webContext = "";
+      if (webMode) {
+        try {
+          const s = await searchFn({ data: { query: context[context.length - 1]?.content?.slice(0, 200) || "" } });
+          if (s.available) webContext = s.context;
+        } catch { /* ignore */ }
+      }
+      const payload = context.map((m) => ({
+        role: m.role, content: m.content,
+        imageUrls: m.attachments?.filter((a) => a.kind === "image").map((a) => a.dataUrl) ?? undefined,
+      }));
+      const res = await chatFn({ data: {
+        messages: payload, threadId: threadId ?? undefined, projectId: projectId ?? undefined,
+        webSearchContext: webContext || undefined,
+      } });
+      await supabase.from("messages")
+        .update({ content: res.reply, versions: priorVersions as unknown as never })
+        .eq("id", last.id);
+      const updated: Msg = { ...last, content: res.reply, versions: priorVersions };
+      const next = [...messages];
+      next[lastIdx] = updated;
+      setMessages(next);
+      setVersionView((v) => { const c = { ...v }; delete c[last.id!]; return c; });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const startEdit = (m: Msg) => { setEditingId(m.id ?? null); setEditValue(m.content); };
@@ -571,20 +610,48 @@ function ChatView({
     const idx = messages.findIndex((m) => m.id === editingId);
     if (idx < 0) { setEditingId(null); return; }
     const edited = messages[idx];
-    // Update the edited message
-    await supabase.from("messages").update({ content: editValue }).eq("id", editingId);
-    // Delete every message AFTER this one in DB and state (user re-runs from here)
+    // Snapshot old content as a version, then update in place.
+    const priorVersion: MsgVersion = {
+      content: edited.content,
+      attachments: edited.attachments ?? null,
+      createdAt: edited.createdAt ?? new Date().toISOString(),
+    };
+    const nextVersions = [...(edited.versions ?? []), priorVersion];
+    await supabase.from("messages")
+      .update({ content: editValue, versions: nextVersions as unknown as never })
+      .eq("id", editingId);
+    // Delete every message AFTER this one (they refer to the old content).
     const toDelete = messages.slice(idx + 1).map((m) => m.id).filter(Boolean) as string[];
     if (toDelete.length) await supabase.from("messages").delete().in("id", toDelete);
     const kept: Msg[] = messages.slice(0, idx + 1).map((m) =>
-      m.id === editingId ? { ...m, content: editValue } : m
+      m.id === editingId ? { ...m, content: editValue, versions: nextVersions } : m
     );
     setMessages(kept);
     setEditingId(null);
+    setVersionView((v) => { const c = { ...v }; delete c[editingId]; return c; });
     // If user message was edited, relaunch generation
     if (edited.role === "user") {
       await send(undefined, true, kept);
     }
+  };
+
+  const restoreVersion = async (m: Msg, versionIdx: number) => {
+    if (!m.id || !m.versions || versionIdx < 0 || versionIdx >= m.versions.length) return;
+    const target = m.versions[versionIdx];
+    const currentAsVersion: MsgVersion = {
+      content: m.content,
+      attachments: m.attachments ?? null,
+      createdAt: m.createdAt ?? new Date().toISOString(),
+    };
+    const newVersions = m.versions.map((v, i) => (i === versionIdx ? currentAsVersion : v));
+    await supabase.from("messages")
+      .update({ content: target.content, attachments: target.attachments ?? null, versions: newVersions as unknown as never })
+      .eq("id", m.id);
+    setMessages((prev) => prev.map((x) => x.id === m.id
+      ? { ...x, content: target.content, attachments: target.attachments ?? null, versions: newVersions }
+      : x));
+    setVersionView((v) => { const c = { ...v }; delete c[m.id!]; return c; });
+    toast.success("Version restaurée");
   };
 
   const shareMsg = async (content: string) => {
