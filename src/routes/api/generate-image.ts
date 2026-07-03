@@ -15,8 +15,8 @@ export const Route = createFileRoute("/api/generate-image")({
 
         const hasRef = Array.isArray(referenceImages) && referenceImages.length > 0;
         const enriched = hasRef
-          ? `${prompt}\n\nIMPORTANT: Reproduis fidèlement le sujet, le visage, les traits, la peau, les vêtements et l'identité visuelle des images de référence. Photoréaliste, FHD, anatomie correcte.`
-          : `${prompt}\n\nStyle: photoréaliste, FHD, lumière naturelle, anatomie correcte, professionnel.`;
+          ? `Tâche d'édition d'image basée sur la ou les image(s) de référence fournie(s).\n\nInstruction utilisateur : ${prompt}\n\nCONSIGNES STRICTES :\n- Conserve fidèlement l'identité visuelle, le visage, les traits, la peau, les cheveux, les vêtements et la pose des sujets présents sur la référence.\n- Applique UNIQUEMENT la modification demandée (ajout, suppression, changement d'arrière-plan, cadrage, format réseau social, etc.).\n- Ne remplace pas les personnes ou objets non concernés.\n- Photoréaliste, haute définition, éclairage cohérent avec la scène d'origine, anatomie correcte, mains correctes.`
+          : `${prompt}\n\nStyle: photoréaliste, haute définition, éclairage naturel, composition professionnelle, anatomie et mains correctes.`;
 
         const content: unknown[] = [{ type: "text", text: enriched }];
         if (hasRef) {
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/api/generate-image")({
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash-image",
+            model: "google/gemini-3.1-flash-image",
             messages: [{ role: "user", content }],
             modalities: ["image", "text"],
           }),
