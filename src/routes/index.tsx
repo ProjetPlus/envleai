@@ -520,14 +520,14 @@ function ChatView({
         const aMsg = await generateImage(tid, text || "Illustration professionnelle FHD");
         setMessages([...nextMessages, aMsg]);
       } else {
-        // Optional live web search
+        // Recherche web AUTOMATIQUE et silencieuse à chaque tour non-image.
         let webContext = "";
-        if (webMode) {
+        const query = text || nextMessages[nextMessages.length - 1]?.content?.slice(0, 400) || "";
+        if (query) {
           try {
-            const s = await searchFn({ data: { query: text || nextMessages[nextMessages.length - 1]?.content?.slice(0, 200) || "" } });
+            const s = await searchFn({ data: { query, limit: 6 } });
             if (s.available) webContext = s.context;
-            else if (s.message) toast.info(s.message);
-          } catch (e) { toast.error((e as Error).message); }
+          } catch { /* silencieux */ }
         }
         const payload = nextMessages.map((m) => ({
           role: m.role,
@@ -579,11 +579,12 @@ function ChatView({
     setBusy(true);
     try {
       let webContext = "";
-      if (webMode) {
+      const rq = context[context.length - 1]?.content?.slice(0, 400) || "";
+      if (rq) {
         try {
-          const s = await searchFn({ data: { query: context[context.length - 1]?.content?.slice(0, 200) || "" } });
+          const s = await searchFn({ data: { query: rq, limit: 6 } });
           if (s.available) webContext = s.context;
-        } catch { /* ignore */ }
+        } catch { /* silencieux */ }
       }
       const payload = context.map((m) => ({
         role: m.role, content: m.content,
