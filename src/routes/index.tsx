@@ -803,7 +803,7 @@ function ChatView({
               <label className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border hover:bg-accent" title="Joindre">
                 <Paperclip className="h-4 w-4" />
                 <input type="file" multiple className="hidden"
-                  accept="image/*,text/*,.txt,.md,.csv,.json,.log"
+                  accept="image/*,application/pdf,text/*,.pdf,.txt,.md,.csv,.json,.log,.html,.xml,.yaml,.yml,.tsv"
                   onChange={(e) => { onAttach(e.target.files); e.target.value = ""; }} />
               </label>
               <button
@@ -812,12 +812,6 @@ function ChatView({
                 className={`flex h-9 w-9 items-center justify-center rounded-md border ${imageMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
                 <ImgIcon className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setWebMode((v) => !v)}
-                title="Recherche web"
-                className={`flex h-9 w-9 items-center justify-center rounded-md border ${webMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
-                <Globe className="h-4 w-4" />
-              </button>
             </div>
             <Textarea
               ref={inputRef}
@@ -825,10 +819,8 @@ function ChatView({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               placeholder={imageMode
-                ? "Décris l'image à générer (Shift+Entrée = ligne)"
-                : webMode
-                  ? "Question avec recherche web temps réel (Shift+Entrée = ligne)"
-                  : "Pose ta question à E'nvlé AI (Shift+Entrée = ligne)"}
+                ? "Décris l'image à générer, ou joins une image à modifier…"
+                : "Pose ta question à E'nvlé AI — Shift+Entrée = nouvelle ligne"}
               rows={1}
               className="min-h-[44px] max-h-40 resize-none"
             />
@@ -847,9 +839,6 @@ function ChatView({
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="px-1 text-[10px] text-muted-foreground">
-            Entrée envoie · Shift+Entrée = nouvelle ligne · Tes données restent privées.
-          </p>
         </div>
       </div>
     </div>
