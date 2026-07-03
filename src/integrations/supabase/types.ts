@@ -23,6 +23,7 @@ export type Database = {
           role: string
           thread_id: string
           user_id: string
+          versions: Json
         }
         Insert: {
           attachments?: Json | null
@@ -32,6 +33,7 @@ export type Database = {
           role: string
           thread_id: string
           user_id: string
+          versions?: Json
         }
         Update: {
           attachments?: Json | null
@@ -41,6 +43,7 @@ export type Database = {
           role?: string
           thread_id?: string
           user_id?: string
+          versions?: Json
         }
         Relationships: [
           {
