@@ -677,7 +677,13 @@ function ChatView({
               </p>
             </div>
           )}
-          {messages.map((m, i) => (
+          {messages.map((m, i) => {
+            const versions = m.versions ?? [];
+            const totalVersions = versions.length + 1; // versions + current
+            const currentIdx = m.id && versionView[m.id] !== undefined ? versionView[m.id] : versions.length;
+            const isViewingOld = currentIdx < versions.length;
+            const displayed = isViewingOld ? versions[currentIdx] : { content: m.content, attachments: m.attachments };
+            return (
             <div key={m.id ?? i} className={`group rounded-xl border p-4 ${m.role === "user" ? "bg-accent/40" : "bg-card"}`}>
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -717,9 +723,9 @@ function ChatView({
                 </div>
               ) : (
                 <>
-                  {m.attachments && m.attachments.length > 0 && (
+                  {displayed.attachments && displayed.attachments.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-2">
-                      {m.attachments.filter((a) => a.kind === "image").map((a, k) => (
+                      {displayed.attachments.filter((a) => a.kind === "image").map((a, k) => (
                         <a key={k} href={a.dataUrl} target="_blank" rel="noreferrer">
                           <img src={a.dataUrl} alt="" className="max-h-64 rounded-lg border object-contain" />
                         </a>
@@ -727,12 +733,36 @@ function ChatView({
                     </div>
                   )}
                   {m.role === "assistant"
-                    ? <Markdown>{m.content}</Markdown>
-                    : <div className="whitespace-pre-wrap text-sm">{m.content}</div>}
+                    ? <Markdown>{displayed.content}</Markdown>
+                    : <div className="whitespace-pre-wrap text-sm">{displayed.content}</div>}
+                  {totalVersions > 1 && m.id && (
+                    <div className="mt-3 flex items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
+                      <button
+                        className="rounded px-1.5 py-0.5 hover:bg-accent disabled:opacity-40"
+                        disabled={currentIdx === 0}
+                        onClick={() => setVersionView((v) => ({ ...v, [m.id!]: Math.max(0, currentIdx - 1) }))}
+                        aria-label="Version précédente"
+                      >◀</button>
+                      <span>Version {currentIdx + 1} / {totalVersions}</span>
+                      <button
+                        className="rounded px-1.5 py-0.5 hover:bg-accent disabled:opacity-40"
+                        disabled={currentIdx >= totalVersions - 1}
+                        onClick={() => setVersionView((v) => ({ ...v, [m.id!]: Math.min(totalVersions - 1, currentIdx + 1) }))}
+                        aria-label="Version suivante"
+                      >▶</button>
+                      {isViewingOld && (
+                        <button
+                          className="ml-2 rounded px-2 py-0.5 hover:bg-accent"
+                          onClick={() => restoreVersion(m, currentIdx)}
+                        >Restaurer cette version</button>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
           {busy && (
             <div className="rounded-xl border bg-card p-4">
               <span className="text-xs font-semibold uppercase text-muted-foreground">E'nvlé AI</span>
