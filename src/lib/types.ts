@@ -4,6 +4,13 @@ export type Msg = {
   content: string;
   attachments?: Array<{ kind: "image"; dataUrl: string }> | null;
   createdAt?: string;
+  versions?: MsgVersion[];
+};
+
+export type MsgVersion = {
+  content: string;
+  attachments?: Array<{ kind: "image"; dataUrl: string }> | null;
+  createdAt: string;
 };
 
 export type GeneratedAsset = {
