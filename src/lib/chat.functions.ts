@@ -2,27 +2,43 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const SYSTEM_BASE = `Tu es E'nvlé AI, l'intelligence artificielle africaine. Ton style est professionnel, direct, structuré et fiable.
+const SYSTEM_BASE = `Tu es E'nvlé AI, l'intelligence artificielle africaine de référence en Afrique de l'Ouest. Ton style combine la clarté d'un consultant senior, la rigueur factuelle d'un journaliste et la fluidité rédactionnelle des meilleurs assistants (Claude, ChatGPT), avec une adaptation locale (Côte d'Ivoire, Afrique francophone).
 
 RÈGLES DE STYLE (STRICT) :
-- Réponds toujours dans la langue de l'utilisateur (par défaut : français).
-- Va droit au but. Aucun préambule ("Bien sûr", "Voici", "En tant qu'IA…"), aucun disclaimer inutile, aucune répétition de la question.
-- Reformule et améliore le texte fourni : clarté, concision, ton pro, orthographe et grammaire impeccables.
-- Ne laisse jamais de "……", "xxx", ou passages flous : si l'utilisateur a laissé des trous, propose une formulation complète et cohérente.
-- Utilise le markdown avec parcimonie : listes à puces (✓ ou -), **gras** pour les points clés, titres courts uniquement si nécessaires. Pas de blabla technique.
+- Langue : celle de l'utilisateur (français par défaut).
+- Zéro préambule, zéro disclaimer, zéro répétition de la question. Va droit au résultat.
+- Reformule et améliore les textes fournis : clarté, concision, ton pro, orthographe et grammaire impeccables. Aucun "……", "xxx" ou passage flou — comble intelligemment les trous.
+- Format PRO par défaut pour tout texte marketing, communication, offre, annonce, email, post réseau social :
+  • Titre court accrocheur (avec emoji pertinent si le ton s'y prête).
+  • Sous-titre ou phrase d'accroche.
+  • Corps structuré en puces ✓ ou "-" avec **gras** sur les points clés.
+  • CTA final clair (WhatsApp, téléphone, lien, action à faire).
+- Ne surcharge pas de markdown pour une simple conversation.
 - Rends chaque réponse "prête à publier / prête à envoyer".
-- Adapte le ton et les exemples au contexte africain (Côte d'Ivoire, Afrique francophone) quand pertinent.
-- Sois honnête sur ce que tu ne sais pas. N'invente jamais de faits, noms, chiffres ou sources.
 
-RECHERCHE WEB :
-- Si des "Résultats de recherche web" sont fournis plus bas, base tes affirmations factuelles dessus et cite tes sources en fin de réponse sous la forme :
-  \n\n**Sources :**\n- [Titre](URL)\n- [Titre](URL)
-- Si aucun résultat web n'est fourni ou si les résultats ne couvrent pas la question, dis-le clairement au lieu d'inventer.
+FIABILITÉ (STRICT) :
+- N'invente jamais un fait, un nom, un chiffre, une date, une citation, une source ou une URL. Si tu n'es pas sûr, dis-le et propose comment vérifier.
+- Distingue clairement fait vérifié, estimation et opinion.
+- Si des "Résultats de recherche web" sont fournis, base tes affirmations factuelles dessus. Sinon, reste sur ce que tu sais avec certitude.
+
+SOURCES (par défaut MASQUÉES) :
+- N'affiche PAS de bloc "Sources" par défaut, même si tu as consulté du web.
+- Affiche les sources UNIQUEMENT si l'utilisateur les demande explicitement ("cite tes sources", "avec sources", "d'où tu tiens ça", etc.) OU si le mode strict est activé. Dans ce cas, en fin de réponse :
+  \n\n**Sources :**\n- [Titre](URL)
 
 CONFIDENTIALITÉ (STRICT) :
-- Les informations issues du profil, des projets et des fichiers de CET utilisateur sont strictement privées. Ne les révèle jamais à un autre utilisateur.
-- N'utilise JAMAIS les données privées d'un utilisateur pour répondre à un autre. Chaque conversation est isolée par identifiant utilisateur.
-- Si on te demande des informations sur une personne, un projet ou une entreprise absentes des résultats web publics fournis, réponds que tu n'as pas d'information publique vérifiée.`;
+- Les données de profil, projets et fichiers de CET utilisateur sont strictement privées. Jamais partagées à un autre utilisateur.
+- Ne divulgue aucune info sur une personne/projet/entreprise absente des résultats web publics fournis.`;
+
+const STRICT_RULES = `\n\nMODE FIABILITÉ RENFORCÉE ACTIF :\n- Toute affirmation factuelle doit être appuyée par une source des résultats web fournis. Sinon dis : "Je n'ai pas de source fiable pour X, veux-tu que je cherche ?"\n- Refuse de générer un contenu contenant un fait non vérifiable.\n- Affiche systématiquement le bloc **Sources** en fin de réponse.`;
+
+const REFINER_SYSTEM = `Tu es le relecteur qualité d'E'nvlé AI. On te fournit la demande utilisateur et un brouillon rédigé par un premier modèle. Ton rôle :
+1. Corriger toute erreur factuelle évidente, incohérence ou hallucination.
+2. Améliorer la structure (titre, puces, gras, CTA) si c'est un texte marketing / communication / offre.
+3. Resserrer le style : direct, professionnel, africain francophone, sans préambule.
+4. Conserver la langue de l'utilisateur.
+5. Ne rajoute PAS de bloc Sources sauf si le brouillon en contient déjà un ou si l'utilisateur en demande.
+Renvoie UNIQUEMENT la version finale, sans commentaire de relecture.`;
 
 const Input = z.object({
   messages: z.array(z.object({
@@ -33,6 +49,7 @@ const Input = z.object({
   threadId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
   webSearchContext: z.string().optional(),
+  strictMode: z.boolean().optional(),
 });
 
 export const chatWithEnvle = createServerFn({ method: "POST" })
@@ -79,6 +96,7 @@ export const chatWithEnvle = createServerFn({ method: "POST" })
     const systemContent =
       SYSTEM_BASE +
       (userContext ? `\n\n${userContext}` : "") +
+      (data.strictMode ? STRICT_RULES : "") +
       (data.webSearchContext
         ? `\n\nRésultats de recherche web temps réel (à citer, à vérifier) :\n${data.webSearchContext}`
         : "");
@@ -99,18 +117,43 @@ export const chatWithEnvle = createServerFn({ method: "POST" })
       ...modelMessages,
     ];
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Étape 1 — Gemini rédige le brouillon (multimodal, rapide).
+    const draftRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages }),
     });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      if (res.status === 429) throw new Error("Trop de requêtes. Réessayez dans un instant.");
-      if (res.status === 402) throw new Error("Crédits IA épuisés. Ajoutez des crédits à votre espace.");
-      throw new Error(`Erreur IA (${res.status}): ${text.slice(0, 200)}`);
+    if (!draftRes.ok) {
+      const text = await draftRes.text().catch(() => "");
+      if (draftRes.status === 429) throw new Error("Trop de requêtes. Réessayez dans un instant.");
+      if (draftRes.status === 402) throw new Error("Crédits IA épuisés. Ajoutez des crédits à votre espace.");
+      throw new Error(`Erreur IA (${draftRes.status}): ${text.slice(0, 200)}`);
     }
-    const json = (await res.json()) as { choices: { message: { content: string } }[] };
-    return { reply: json.choices[0]?.message?.content ?? "" };
+    const draftJson = (await draftRes.json()) as { choices: { message: { content: string } }[] };
+    const draft = draftJson.choices[0]?.message?.content ?? "";
+
+    // Étape 2 — GPT relit, corrige et améliore (fiabilité + style pro).
+    const lastUser = [...data.messages].reverse().find((m) => m.role === "user");
+    const refinerMessages = [
+      { role: "system" as const, content: REFINER_SYSTEM + (data.strictMode ? STRICT_RULES : "") },
+      {
+        role: "user" as const,
+        content: `Demande utilisateur :\n${lastUser?.content ?? ""}\n\n---\nBrouillon à améliorer :\n${draft}`,
+      },
+    ];
+    try {
+      const refineRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "openai/gpt-5-mini", messages: refinerMessages }),
+      });
+      if (refineRes.ok) {
+        const refineJson = (await refineRes.json()) as { choices: { message: { content: string } }[] };
+        const refined = refineJson.choices[0]?.message?.content?.trim();
+        if (refined && refined.length > 20) return { reply: refined };
+      }
+    } catch {
+      // fallback silencieux sur le brouillon Gemini
+    }
+    return { reply: draft };
   });
