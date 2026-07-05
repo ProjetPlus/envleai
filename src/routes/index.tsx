@@ -741,7 +741,15 @@ function ChatView({
                     </div>
                   )}
                   {m.role === "assistant"
-                    ? <Markdown>{displayed.content}</Markdown>
+                    ? (() => {
+                        const { body, tag } = splitReliability(displayed.content);
+                        return (
+                          <>
+                            <Markdown>{body}</Markdown>
+                            {tag && <ReliabilityBadge tag={tag} />}
+                          </>
+                        );
+                      })()
                     : <div className="whitespace-pre-wrap text-sm">{displayed.content}</div>}
                   {totalVersions > 1 && m.id && (
                     <div className="mt-3 flex items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
