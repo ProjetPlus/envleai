@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Menu, Plus, Send, Download, Image as ImgIcon, Trash2, MessageSquare,
   Copy, Share2, RotateCcw, Edit3, Folder, X, LogOut, User,
-  Paperclip, Library, FileText, Loader2, Search,
+  Paperclip, Library, FileText, Loader2, Search, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/envle-logo.png";
@@ -398,6 +398,7 @@ function ChatView({
     Array<{ kind: "image" | "doc"; name: string; dataUrl?: string; text?: string; mime: string }>
   >([]);
   const [imageMode, setImageMode] = useState(false);
+  const [strictMode, setStrictMode] = useState(false);
 
   useEffect(() => { inputRef.current?.focus(); }, [threadId]);
 
@@ -537,6 +538,7 @@ function ChatView({
         const res = await chatFn({ data: {
           messages: payload, threadId: tid, projectId: projectId ?? undefined,
           webSearchContext: webContext || undefined,
+          strictMode,
         } });
         const { data: inserted } = await supabase.from("messages")
           .insert({ user_id: userId, thread_id: tid, role: "assistant", content: res.reply })
@@ -593,6 +595,7 @@ function ChatView({
       const res = await chatFn({ data: {
         messages: payload, threadId: threadId ?? undefined, projectId: projectId ?? undefined,
         webSearchContext: webContext || undefined,
+        strictMode,
       } });
       await supabase.from("messages")
         .update({ content: res.reply, versions: priorVersions as unknown as never })
@@ -738,7 +741,15 @@ function ChatView({
                     </div>
                   )}
                   {m.role === "assistant"
-                    ? <Markdown>{displayed.content}</Markdown>
+                    ? (() => {
+                        const { body, tag } = splitReliability(displayed.content);
+                        return (
+                          <>
+                            <Markdown>{body}</Markdown>
+                            {tag && <ReliabilityBadge tag={tag} />}
+                          </>
+                        );
+                      })()
                     : <div className="whitespace-pre-wrap text-sm">{displayed.content}</div>}
                   {totalVersions > 1 && m.id && (
                     <div className="mt-3 flex items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
@@ -812,6 +823,12 @@ function ChatView({
                 className={`flex h-9 w-9 items-center justify-center rounded-md border ${imageMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
                 <ImgIcon className="h-4 w-4" />
               </button>
+              <button
+                onClick={() => setStrictMode((v) => !v)}
+                title={strictMode ? "Mode fiabilité renforcée activé — sources exigées" : "Activer le mode fiabilité renforcée"}
+                className={`flex h-9 w-9 items-center justify-center rounded-md border ${strictMode ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "hover:bg-accent"}`}>
+                <ShieldCheck className="h-4 w-4" />
+              </button>
             </div>
             <Textarea
               ref={inputRef}
@@ -851,6 +868,31 @@ function IconBtn({ children, onClick, label }: { children: React.ReactNode; onCl
       className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
       {children}
     </button>
+  );
+}
+
+// Extrait la ligne d'étiquette de fiabilité en fin de réponse assistant.
+function splitReliability(content: string): { body: string; tag: "fiable" | "estimation" | "opinion" | "créatif" | null } {
+  const re = /\n?\s*—\s*\[(fiable|estimation|opinion|cr[ée]atif)\]\s*$/i;
+  const m = content.match(re);
+  if (!m) return { body: content, tag: null };
+  const raw = m[1].toLowerCase().replace("creatif", "créatif");
+  return { body: content.slice(0, m.index).trimEnd(), tag: raw as "fiable" | "estimation" | "opinion" | "créatif" };
+}
+
+function ReliabilityBadge({ tag }: { tag: "fiable" | "estimation" | "opinion" | "créatif" }) {
+  const map = {
+    fiable:     { label: "Fiable",     cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+    estimation: { label: "Estimation", cls: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+    opinion:    { label: "Opinion",    cls: "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+    "créatif":  { label: "Créatif",    cls: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400" },
+  } as const;
+  const s = map[tag];
+  return (
+    <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>
+      <ShieldCheck className="h-3 w-3" />
+      {s.label}
+    </div>
   );
 }
 
