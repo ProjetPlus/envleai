@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Menu, Plus, Send, Download, Image as ImgIcon, Trash2, MessageSquare,
   Copy, Share2, RotateCcw, Edit3, Folder, X, LogOut, User,
-  Paperclip, Library, FileText, Loader2, Search,
+  Paperclip, Library, FileText, Loader2, Search, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/envle-logo.png";
