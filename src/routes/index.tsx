@@ -865,6 +865,31 @@ function IconBtn({ children, onClick, label }: { children: React.ReactNode; onCl
   );
 }
 
+// Extrait la ligne d'étiquette de fiabilité en fin de réponse assistant.
+function splitReliability(content: string): { body: string; tag: "fiable" | "estimation" | "opinion" | "créatif" | null } {
+  const re = /\n?\s*—\s*\[(fiable|estimation|opinion|cr[ée]atif)\]\s*$/i;
+  const m = content.match(re);
+  if (!m) return { body: content, tag: null };
+  const raw = m[1].toLowerCase().replace("creatif", "créatif");
+  return { body: content.slice(0, m.index).trimEnd(), tag: raw as "fiable" | "estimation" | "opinion" | "créatif" };
+}
+
+function ReliabilityBadge({ tag }: { tag: "fiable" | "estimation" | "opinion" | "créatif" }) {
+  const map = {
+    fiable:     { label: "Fiable",     cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+    estimation: { label: "Estimation", cls: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+    opinion:    { label: "Opinion",    cls: "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+    "créatif":  { label: "Créatif",    cls: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400" },
+  } as const;
+  const s = map[tag];
+  return (
+    <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>
+      <ShieldCheck className="h-3 w-3" />
+      {s.label}
+    </div>
+  );
+}
+
 // ---------------- LIBRARY ----------------
 type LibraryItem = {
   id: string;
