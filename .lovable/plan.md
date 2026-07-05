@@ -1,63 +1,69 @@
-# Plan E'nvlé AI — livraison phasée
+# E'nvlé AI — Feuille de route produit
 
-Le périmètre est trop large pour une seule itération stable. Je livre en 3 phases consécutives sans attendre de validation entre chaque (sauf migration DB qui exige ton clic d'approbation).
+Cahier des charges reçu = 28 axes. Impossible à livrer en un seul tour sans casser l'app. Voici le découpage en 5 phases livrables et testables, dans l'ordre d'impact utilisateur.
 
-## Phase 1 — Fondations (ce tour-ci)
+## État actuel (déjà en place)
 
-**Marque**
-- Nom corrigé partout : « E'nvlé AI » (et non « E'nvlé IA »).
-- Logo officiel intégré (fond rendu neutre via traitement transparent).
+- Auth email + Google, profils, projets, threads, messages.
+- Chat multimodal (texte + images + PDF), historique persistant.
+- Recherche web via Firecrawl (auto, sources masquées par défaut).
+- Double moteur : Gemini rédige, GPT-5-mini relit.
+- Génération d'images (Gemini 3.1 flash image).
+- Versions de messages (édition + régénération).
+- PWA de base, logo officiel.
 
-**Authentification**
-- Google OAuth (managé Lovable) + Email/Password.
-- Page `/auth` publique, layout `_authenticated` protège le reste.
+## Phase A — Fiabilité + Personnalisation (prochain tour)
 
-**Profil utilisateur + onboarding**
-- Table `profiles` (nom, âge, métier/secteur, pays, langue, objectifs).
-- Modal d'onboarding à la première connexion, données réutilisées comme contexte IA.
+1. **Champ nom d'utilisateur** dans profil + onboarding, propagé dans le system prompt (fin des "toi/vous" génériques).
+2. **Intelligence temporelle** : injection date/heure/fuseau côté serveur dans chaque appel modèle.
+3. **Indicateur de fiabilité** : le modèle tague chaque réponse `[verified] / [estimation] / [opinion] / [creative]` → badge visuel discret sous le message.
+4. **Mode strict** (toggle icône bouclier dans composer) : refuse les affirmations sans source web, force citation.
+5. **System prompt v2** : ton semi-humain, empathique, proactif, anti-répétition, adapté au niveau utilisateur.
 
-**Projets / espaces de travail**
-- Table `projects` (nom, description, system prompt projet).
-- Table `project_files` + bucket Storage `project-files` (docs, images, vidéos).
-- Sidebar : liste projets → chaque projet a ses threads.
+## Phase B — Documents & Voix
 
-**Historique persistant**
-- Tables `threads` + `messages` scopées `user_id` + `project_id`, RLS stricte.
-- Route `/$projectId/$threadId` ; reload restaure les messages.
+6. **Upload universel** : DOCX, XLSX, PPTX, CSV, TXT, audio → extraction serveur (mammoth / xlsx / pptx-parser) puis contexte texte injecté au modèle. Aperçu miniature en bulle.
+7. **Transcription audio** : bouton micro → `/v1/audio/transcriptions` (gpt-4o-mini-transcribe), enregistrement WAV côté client.
+8. **Export documents pro** :
+   - PDF (jspdf + autotable : couverture, TOC, pagination).
+   - DOCX (`docx` npm).
+   - XLSX (`exceljs` avec formules).
+   - PPTX (`pptxgenjs` avec charte).
 
-**Fixes chat**
-- Actions sur chaque message : copier, supprimer, partager, régénérer, éditer (user).
-- Bouton « Nouvelle conversation » fonctionnel.
-- Génération d'images réparée (modèle `google/gemini-3-flash-image-preview` via gateway, gestion d'erreurs).
-- Export PDF / TXT depuis n'importe quelle vue avec nom de fichier auto (`envle-{thread}-{date}`).
+## Phase C — Sources projet & Mémoire
 
-## Phase 2 — Recherche web temps réel (tour suivant)
+9. **Fichiers Sources** par projet : bucket storage, jusqu'à 50 fichiers / 1 Go, indexation texte, référencés automatiquement dans les threads du projet.
+10. **Mémoire utilisateur** : table `user_memories` (type: temp/project/permanent), UI de gestion (voir/éditer/supprimer/désactiver), injectée dans le system prompt.
+11. **Bibliothèque d'assets** : images générées + docs produits classés par projet/thread avec filtres.
 
-- Connecteur **Firecrawl** activé côté serveur (search + scrape + multi-sources).
-- Outil `web_search` exposé au modèle via AI SDK `tools` : il décide quand chercher.
-- Pipeline : search → scrape top N → comparaison sources → synthèse citée.
-- Adaptation contexte africain via system prompt enrichi.
+## Phase D — Générateurs visuels avancés
 
-## Phase 3 — Documents pro + voix (tour suivant)
+12. **Générateur de présentations façon Gamma** : prompt → plan → slides (`pptxgenjs`) avec charte cohérente, exports PPTX + PDF.
+13. **Édition d'image avancée** : recadrage réseau social (1:1, 9:16, 16:9, 4:5), extension, inpainting via Gemini 3.1 flash image avec masques.
+14. **Infographies / schémas** : génération SVG + Mermaid (diagrammes, orga, mindmap).
 
-- **PDF** : jspdf + autotable (déjà installé, mise en page propre + couverture + sommaire).
-- **DOCX** : `docx` (titres, listes, tableaux, images).
-- **PPTX** : `pptxgenjs` (template, transitions, images IA générées par slide).
-- **XLSX** : `exceljs` (formules, mise en forme conditionnelle, graphiques).
-- **Voix** : TTS via Lovable AI (`google/gemini-2.5-flash-preview-tts`) — bouton lecture sur chaque message assistant.
-- Vidéo : reportée (coût + latence élevés, je préviendrai quand stable).
+## Phase E — Orchestration & performance
 
-## Hors périmètre immédiat (à confirmer plus tard)
+15. **Router multi-modèles** : classification rapide de la requête (code / créatif / factuel / long-form) → sélection modèle (GPT-5, Gemini 3 Pro, Gemini flash) au lieu du pipeline fixe actuel.
+16. **Streaming SSE** des réponses chat (au lieu du POST bloquant).
+17. **Cache** des recherches web (Firecrawl) et des extractions de documents.
+18. **Prompt d'installation PWA** premium (dialog centré, détection standalone).
 
-- Notifications push + tâches en arrière-plan (PWA Service Worker dédié).
-- Entraînement IA cross-utilisateurs (nécessite politique de confidentialité explicite + opt-in RGPD avant toute mutualisation de données — je refuserai de l'activer sans ce cadre).
-- Génération vidéo.
+## Hors périmètre immédiat (à valider séparément)
+
+- Workflows / automatisations no-code (§20) → gros chantier UI dédié.
+- Apprentissage cross-utilisateurs (§27) → exige politique RGPD + opt-in, refus par défaut.
+- Base de connaissances africaine curée (§28) → travail éditorial continu, pas un feature technique livrable en une phase.
+- Génération vidéo → coût/latence prohibitifs aujourd'hui.
 
 ## Détails techniques
 
-- Stack : TanStack Start + Lovable Cloud (Supabase managé).
-- Tous les appels modèles passent par Lovable AI Gateway (`LOVABLE_API_KEY`).
-- RLS sur toutes les tables user-scoped (`auth.uid() = user_id`).
-- Storage bucket privé `project-files`, policies `auth.uid()`.
-- Bearer attacher déjà câblé (`attachSupabaseAuth`).
-- La migration DB de phase 1 nécessite ton approbation (un seul clic) avant que je continue avec le code applicatif.
+- Stack inchangée : TanStack Start + Lovable Cloud + Lovable AI Gateway.
+- Nouveaux serverFn : `analyzeDocument`, `transcribeAudio`, `generatePresentation`, `exportDocument`, `manageMemory`, `routeRequest`.
+- Nouvelles tables : `user_memories`, `project_sources`, `generated_assets`.
+- Nouveaux buckets : `project-sources` (privé, 1 Go/projet).
+- Aucun changement stack, aucune migration destructive.
+
+## Ordre d'exécution proposé
+
+Je démarre **Phase A** immédiatement après ton feu vert sur ce plan. Chaque phase suivante s'enchaîne sans nouvelle validation sauf si une migration DB nécessite ton clic (obligatoire côté Lovable Cloud).
