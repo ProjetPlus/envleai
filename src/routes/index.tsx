@@ -823,6 +823,12 @@ function ChatView({
                 className={`flex h-9 w-9 items-center justify-center rounded-md border ${imageMode ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>
                 <ImgIcon className="h-4 w-4" />
               </button>
+              <button
+                onClick={() => setStrictMode((v) => !v)}
+                title={strictMode ? "Mode fiabilité renforcée activé — sources exigées" : "Activer le mode fiabilité renforcée"}
+                className={`flex h-9 w-9 items-center justify-center rounded-md border ${strictMode ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "hover:bg-accent"}`}>
+                <ShieldCheck className="h-4 w-4" />
+              </button>
             </div>
             <Textarea
               ref={inputRef}
