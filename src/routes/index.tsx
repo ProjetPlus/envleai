@@ -398,6 +398,7 @@ function ChatView({
     Array<{ kind: "image" | "doc"; name: string; dataUrl?: string; text?: string; mime: string }>
   >([]);
   const [imageMode, setImageMode] = useState(false);
+  const [strictMode, setStrictMode] = useState(false);
 
   useEffect(() => { inputRef.current?.focus(); }, [threadId]);
 
@@ -537,6 +538,7 @@ function ChatView({
         const res = await chatFn({ data: {
           messages: payload, threadId: tid, projectId: projectId ?? undefined,
           webSearchContext: webContext || undefined,
+          strictMode,
         } });
         const { data: inserted } = await supabase.from("messages")
           .insert({ user_id: userId, thread_id: tid, role: "assistant", content: res.reply })
@@ -593,6 +595,7 @@ function ChatView({
       const res = await chatFn({ data: {
         messages: payload, threadId: threadId ?? undefined, projectId: projectId ?? undefined,
         webSearchContext: webContext || undefined,
+        strictMode,
       } });
       await supabase.from("messages")
         .update({ content: res.reply, versions: priorVersions as unknown as never })
